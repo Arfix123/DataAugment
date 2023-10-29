@@ -1,9 +1,11 @@
 #include "../include/bitmixer.h"
+#include <cassert>
+#include <charconv>
 #include <filesystem>
+#include <optional>
 #include <tuple>
 
 namespace fs = std::filesystem;
-namespace cl = cimg_library;
 
 // Struct, class, enum declarations
 
@@ -15,53 +17,100 @@ class cio_stream{
     cio_stream() = delete;
 public:
 
-    cio_stream(fs::path x) : destination{x}{}
+    cio_stream(fs::path x) : destination{x / "recombined.jpg"}{}
 
-    std::optional<cio_stream> create_image_output(const fs::path fp_o) {
+    static std::optional<cio_stream> create_image_output(const fs::path fp_o) {
         if (!fs::exists(fp_o) || !fs::is_directory(fp_o)) {
-            std::cerr << "Recombine conditions not met\n";
+            std::cerr << "Could not initialize image output stream\n";
             return std::nullopt;
         }
-        cio_stream result{fp_o};
+        cio_stream result {fp_o};
+        return result;
     }
     
     cio_stream& operator <<(const cl::CImg<unsigned char> &t) {
-        t.save(destination.c_str(), streamed_count++);
-        return *this;
+        try {
+            // TODO : goofy aah names
+            t.save(destination.c_str(), streamed_count++);
+            return *this;
+        }
+        catch(const cl::CImgIOException& e) {
+            throw e;
+        }
     }
+
+    const fs::path& get_destination() const {
+        return destination;
+    }
+};
+
+struct recombine_result {
+    int result;
+    std::optional<std::string> message;
 };
 
 
 // Functions
 
-int recombine_image(const fs::path &, const fs::path &);
-int recombine_directory(const fs::path &, const fs::path &);
+recombine_result recombine_image(const std::string&, cio_stream&,
+                                 const int&, const bool&);
 
-int recombine(const char *t, const char * o){
+int recombine_fs(const fs::path& t, const fs::path& o, int plane, bool adjacent_flag){
 
-    fs::path fp_target(t), fp_output(o);
-    int code = EXIT_FAILURE;
-
-    if (!fs::exists(fp_target) || !fs::exists(fp_output) || !fs::is_directory(fp_output)) {
-        // TODO : Assert file-dir or dir-dir process
+    if (plane > 7 || !fs::exists(t) || !fs::exists(t) || !fs::is_directory(o)) {
+        // TODO : Determine whether file-dir or dir-dir process
         // TODO : Implement recursive building of path
         std::cerr << "Recombine conditions not met\n";
-        return code;
+        return -1;
     }
-    if (fs::is_regular_file(fp_target)) {
-        code = recombine_image(fp_target, fp_output);
+
+    auto output_stream = cio_stream::create_image_output(o);
+    if (!output_stream) {
+        std::cerr << "Could not initialize output stream to " << o << "\n";
+        return -1;
+    }
+    
+    if (fs::is_regular_file(t)) {
+        auto rr = recombine_image(t, *output_stream, plane, adjacent_flag);
+        if (rr.result != 0) {
+            std::cerr << "Could not recombine image " << t;
+            if (rr.message) std::cerr << " : " << *rr.message << "\n";
+            else std::cerr << "\n";
+            return -1;
+        }
     }
     else {
-        code = recombine_directory(fp_target, fp_output);
+
+        for (auto& p : fs::directory_iterator(t)) {
+            std::string filepath = p.path().string();
+            std::cout << "Processing " << filepath << "\n";
+         
+            auto rr = recombine_image(filepath, *output_stream, plane, adjacent_flag);
+            if (rr.result != 0) {
+                std::cerr << "Could not recombine image " << filepath;
+                if (rr.message) std::cerr << " : " << *rr.message << "\n";
+                else std::cerr << "\n";
+                return -1;
+            }
+
+        }
     }
 
-    return code;
+    return 0;
 }
 
-int test_func(const fs::path & t, const fs::path & ){
-    cl::CImg<unsigned char> image(t.c_str());
-    cimg_foroff(image,off) {image[off] = off % 255;}
-    cl::CImgDisplay main_disp(image,"Result of your actions");
+int recombine(const char *t, const char *o, int p, bool a){
+    return recombine_fs(t, o, p, a);
+}
+
+template <typename T>
+int custom_display(cl::CImg<T> given, const fs::path &o){
+    T MASK = 0b10000000;
+
+    fs::path fp_output(o);
+    // cimg_forXYC(image, x, y, c) { if (40 < x && x < 80) image(x, y, c) = 255u;}
+    cimg_for(given, ptr, unsigned char){*ptr &= MASK;}
+    cl::CImgDisplay main_disp(given,"Result of your actions");
     
     while (!main_disp.is_closed()) {
         main_disp.wait();
@@ -70,50 +119,42 @@ int test_func(const fs::path & t, const fs::path & ){
     return 0;
 }
 
-cl::CImg<unsigned char> init_image(cl::CImg<unsigned char> t, const unsigned char masks[3]){
-    cimg_forC(t, c){
-        cimg_forXY(t, x, y){
-            t(x,y,0,c) &= masks[c];
-        }
+
+recombine_result recombine_image(const std::string& filepath, cio_stream& iout,
+                                 const int& plane, const bool& is_adjacent) {
+    cl::CImg<unsigned char> given{};
+    try {
+        given.load(filepath.c_str());
     }
-    return t;
-}
-
-void recombine_iterative(cl::CImg<unsigned char> t, cio_stream out,
-                         const unsigned char masks[3]) {
-    // IMPLEMENT THIS GOOFY AAAH ALGORITHM
-}
-
-int recombine_img(const cl::CImg<unsigned char> & original, const fs::path & destination){
-    cl::CImg<unsigned char> combined(original);
-    cio_stream out_stream{destination};
-    cl::CImgDisplay main_disp(combined,"Result of your actions");
-
-    auto current = init_image(original, MASKS);
+    catch(const cl::CImgIOException& e) {
+        return {-1, "Error loading image : " + filepath};
+    } 
     
-    return 0;
-}
+    const std::vector<unsigned char>& held = MASKS[plane - 1];
+    if (is_adjacent)
+        std::cout << "not implemented lol";
+    
+    auto temp = given;
 
-int recombine_directory(const fs::path &, const fs::path &){
-    std::clog << "RECOMBINED DIRECTORY" << std::endl;
-    return 0;
-}
-
-std::optional<unsigned char> parse_planes(const char* query){
-    unsigned char result = 0;
-    for (auto it = query; *it != '0'; it++)
+    for (const auto &mask : held)
     {
-        char c = *it;
-        if (c < '0' || c > '7') {
-            std::cerr << "ERROR : Invalid bitplane demand\n";
-            return std::nullopt;
+        cimg_forXYC(temp, x, y, c){
+            temp(x, y, c) = given(x, y, c) & mask;
         }
-        result |= (1u << ('7' - '0'));
+        iout << temp;
     }
-    
+    return {0, std::nullopt};
+};
+
+// UTILITIES
+
+std::optional<int> parse_int(const char* query){
+    // Parse using std::from_chars
+    int result;
+    auto [p, ec] = std::from_chars(query, query + strlen(query), result);
+    if (ec != std::errc()) {
+        std::cerr << "Could not parse integer\n";
+        return std::nullopt;
+    }
     return result;
 }
-
-using channels = std::tuple<cl::CImg<unsigned char>, cl::CImg<unsigned char>,
-                            cl::CImg<unsigned char>>;
-

@@ -7,14 +7,30 @@ int main(int argc, char *argv[])
 {
     int opt = 0;
     int result = EXIT_SUCCESS;
-    while ((opt = getopt(argc, argv, "f:o:r:g:b:i:")) != -1 && result == EXIT_SUCCESS)
+    bool continue_flag = true;
+    bool adjacent_flag = false;
+    char* TARGET = nullptr, *OUTPUT = nullptr;
+    std::optional<int> target_bitplanes = std::nullopt;
+    while ((opt = getopt(argc, argv, "f:o:n:N:ah")) != -1 && continue_flag)
     {
         std::optional<unsigned char> parse_result;
         switch (opt)
         {
+        case 'h':
+            std::cout << "Usage: " << argv[0] << " -f <source> -o <output> -n <bitplanes> [-N <threads = 1>] [-a] [-h]"
+                            "\n\t-f <source> : Source image or folder containing images to be processed"
+                            "\n\t-o <output> : Output folder for the augmented images"
+                            "\n\t-n <bitplanes> : Amount of bitplanes to extract from the source images"
+                            "\n\t-a : Turn on adjacent extraction constraint"
+                            "\n\t-h : Display this help message"
+                            << std::endl;
+            continue_flag = false;
+            result = EXIT_SUCCESS;
+            break;
         case 'f':
             if (TARGET) {
                 std::cerr << "Unexpected option : Source already provided\n";
+                continue_flag = false;
                 result = EXIT_FAILURE;
                 break;
             }
@@ -22,69 +38,45 @@ int main(int argc, char *argv[])
             break;
         case 'o':
             if (OUTPUT) {
-                std::cerr << "Unexpected option : Processing grayscale\n";
+                std::cerr << "Unexpected option : Output already provided\n";
+                continue_flag = false;
                 result = EXIT_FAILURE;
                 break;
             }
             OUTPUT = optarg;
             break;
-        case 'r':
-        case 'g':
-        case 'b':
-            if (TYPE == GRAYSCALE) {
-                std::cerr << "Unexpected option : Processing grayscale\n";
-                result = EXIT_FAILURE;
-                break;
-            }
-            TYPE = RGB;
-            parse_result = parse_planes(optarg);
-            if (parse_result) {
-                switch (opt)
-                {
-                case 'r':
-                    RED = *parse_result;
-                    break;
-                case 'g':
-                    GREEN = *parse_result;
-                    break;
-                case 'b':
-                    BLUE = *parse_result;
-                    break;
-                default:
-                    break;
-                }
-            }
+        case 'n':
+            target_bitplanes = parse_int(optarg);
             break;
-        case 'i':
-            if (TYPE == RGB) {
-                std::cerr << "Unexpected option : Processing rgb image\n";
-                result = EXIT_FAILURE;
-                break;
-            }
-            TYPE = GRAYSCALE;
-            parse_result = parse_planes(optarg);
-            GRAY = *parse_result;
+        case 'a':
+            adjacent_flag = true;
             break;
-        // TODO option for the result dataset to not contain the original images
         default:
             std::cerr << "Invalid option\n";
+            continue_flag = false;
             result = EXIT_FAILURE;
             break;
         }
     }
 
-    // TODO Finish error states
-    if (TYPE == UNDEFINED) {
-        std::cerr << "Failure : No bitplane info given\n";
-        result = EXIT_FAILURE;
+    if (!TARGET || !OUTPUT || !target_bitplanes) {
+        std::cerr << "Missing required arguments or unable to parse\n";
+        return EXIT_FAILURE;
     }
 
     // MAGIC HAPPENS HERE
-    if (result != EXIT_FAILURE) {
-        result = test_func(TARGET, OUTPUT);
+    if (result == EXIT_FAILURE) {
+        std::cerr << "Exiting with failure before recombining\n";
+        return result;
     }
+
+    result = recombine(TARGET, OUTPUT, *target_bitplanes, adjacent_flag);
     
-    std::cout << "FINISHED!" << std::endl;
+    if (result == EXIT_FAILURE) {
+        std::cerr << "Exiting with failure after recombining\n";
+        return result;
+    }
+    std::cout << "Exiting with success\n";
     return result;
 }
 
