@@ -15,21 +15,7 @@ namespace cl = cimg_library;
 namespace fs = std::filesystem;
 
 // Struct, clalss, enum declarations
-enum source_type
-{
-    UNDEFINED,
-    GRAYSCALE,
-    RGB
-};
 
-enum augment_type
-{
-    SMALL,
-    BIG,
-    CUSTOM
-};
-
-// TODO : HARDCODING solution OMEGALUL
 inline std::vector<std::vector<unsigned char>> MASKS = {
     {},                                                                         // 1 - empty
     {},                                                                         // 2 - empty
@@ -47,6 +33,18 @@ inline std::vector<std::vector<unsigned char>> MASKS = {
      0b11011011, 0b11010111, 0b11001111},
     {0b11111110, 0b11111101, 0b11111011, 0b11110111, 0b11101111, 0b11011111}    // 7 - 6
 };
+
+inline std::vector<std::vector<unsigned char>> ADJACENT_MASKS = {
+    {},
+    {},
+    {0b11000001, 0b11000010, 0b11000100, 0b11001000, 0b11010000, 0b11100000},
+    {},
+    {},
+    {},
+    {0b11111110, 0b11111101, 0b11111011, 0b11110111, 0b11101111, 0b11011111}
+};
+
+inline bool QUIET_FLAG = false;
 
 
 // FUNCTION DECLARATIONS

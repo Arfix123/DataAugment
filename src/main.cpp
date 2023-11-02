@@ -11,21 +11,24 @@ int main(int argc, char *argv[])
     bool adjacent_flag = false;
     char* TARGET = nullptr, *OUTPUT = nullptr;
     std::optional<int> target_bitplanes = std::nullopt;
-    while ((opt = getopt(argc, argv, "f:o:n:N:ah")) != -1 && continue_flag)
+    while ((opt = getopt(argc, argv, "f:o:n:N:ahq")) != -1 && continue_flag)
     {
         std::optional<unsigned char> parse_result;
         switch (opt)
         {
         case 'h':
-            std::cout << "Usage: " << argv[0] << " -f <source> -o <output> -n <bitplanes> [-N <threads = 1>] [-a] [-h]"
+            std::cout << "Usage: " << argv[0] << " -f <source> -o <output> -n <bitplanes> [-a] [-h] [-q]"
                             "\n\t-f <source> : Source image or folder containing images to be processed"
                             "\n\t-o <output> : Output folder for the augmented images"
                             "\n\t-n <bitplanes> : Amount of bitplanes to extract from the source images"
                             "\n\t-a : Turn on adjacent extraction constraint"
+                            "\n\t-q : Turn on quiet mode"
                             "\n\t-h : Display this help message"
                             << std::endl;
-            continue_flag = false;
-            result = EXIT_SUCCESS;
+            return EXIT_SUCCESS;
+            break;
+        case 'q':
+            QUIET_FLAG = true;
             break;
         case 'f':
             if (TARGET) {
@@ -66,17 +69,17 @@ int main(int argc, char *argv[])
 
     // MAGIC HAPPENS HERE
     if (result == EXIT_FAILURE) {
-        std::cerr << "Exiting with failure before recombining\n";
+        std::cerr << "SETUP FAILURE\n";
         return result;
     }
 
     result = recombine(TARGET, OUTPUT, *target_bitplanes, adjacent_flag);
     
     if (result == EXIT_FAILURE) {
-        std::cerr << "Exiting with failure after recombining\n";
+        std::cerr << "RECOMBINE FAILURE\n";
         return result;
     }
-    std::cout << "Exiting with success\n";
+    std::cout << "RECOMBINE SUCCESS\n";
     return result;
 }
 

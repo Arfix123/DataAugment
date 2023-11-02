@@ -1,4 +1,4 @@
-#include "../include/bitmixer.h"
+#include "bitmixer.h"
 #include <cassert>
 #include <charconv>
 #include <filesystem>
@@ -30,7 +30,6 @@ public:
     
     cio_stream& operator <<(const cl::CImg<unsigned char> &t) {
         try {
-            // TODO : goofy aah names
             t.save(destination.c_str(), streamed_count++);
             return *this;
         }
@@ -83,7 +82,8 @@ int recombine_fs(const fs::path& t, const fs::path& o, int plane, bool adjacent_
 
         for (auto& p : fs::directory_iterator(t)) {
             std::string filepath = p.path().string();
-            std::cout << "Processing " << filepath << "\n";
+            if (!QUIET_FLAG)
+                std::cout << "Processing " << filepath << "\n";
          
             auto rr = recombine_image(filepath, *output_stream, plane, adjacent_flag);
             if (rr.result != 0) {
